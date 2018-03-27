@@ -1,10 +1,10 @@
 #include <SD.h>
 
 File dataFile;
-int samples = 0;
 
 #define LED_PIN 9
 #define BATTERY_PIN A0
+#define BUTTON_PIN 2
 
 // unused
 long readVcc() {
@@ -52,6 +52,7 @@ void blinkError(int err) {
 
 void setup() {
   pinMode(LED_PIN, OUTPUT);
+  pinMode(BUTTON_PIN, INPUT);
   Serial.begin(9600);
   Serial.print("init SD card...");
   pinMode(10, OUTPUT);
@@ -60,27 +61,30 @@ void setup() {
     blinkError(1);
     while(1);
   }
-  Serial.println("done.");
-  dataFile = SD.open("voltages.txt", FILE_WRITE);
+  Serial.println("done. Enter filename.");
+  while(Serial.available() == 0);
+  String filename = Serial.readString();
+  dataFile = SD.open(filename, FILE_WRITE);
   if (!dataFile) {
-    Serial.println("error opening voltages.txt");
+    Serial.print("error opening ");
+    Serial.println(filename);
+    Serial.println("filename must be no more than 8 characters, then a dot, then an extension of no more than 3 characters (probably txt)");
     blinkError(2);
     while(1);
   }
+  Serial.print("writing to ");
+  Serial.println(filename);
 }
 
 void loop() {
-  if (samples >= 1000) return;
   int measurement = analogRead(BATTERY_PIN);
   int mV = readingTomV(measurement);
-  Serial.print(measurement);
-  Serial.print(" ");
   Serial.println(mV);
   dataFile.println(mV);
-  samples++;
-  if (samples >= 1000) {
+  if (digitalRead(BUTTON_PIN)) {
     dataFile.close();
     digitalWrite(LED_PIN, HIGH);
+    while(1);
   }
-  delay(100);
+  delay(1000);
 }
