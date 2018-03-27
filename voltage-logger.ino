@@ -6,6 +6,7 @@ int samples = 0;
 #define LED_PIN 9
 #define BATTERY_PIN A0
 
+// unused
 long readVcc() {
   // Read 1.1V reference against AVcc
   // set the reference to Vcc and the measurement to the internal 1.1V reference
@@ -30,6 +31,13 @@ long readVcc() {
 
   result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
   return result; // Vcc in millivolts
+}
+
+// convert reading from Arduino's analog pin (0-1024) into millivolts (0-5000)
+// also accounts for voltage divider circuit with two 10-ohm resistors
+int readingTomV(int reading) {
+  float volts = (reading / 1024.0) * 5;
+  return (int)(volts * 2000);
 }
 
 void blinkError(int err) {
@@ -64,8 +72,11 @@ void setup() {
 void loop() {
   if (samples >= 1000) return;
   int measurement = analogRead(BATTERY_PIN);
-  Serial.println(measurement);
-  dataFile.println(measurement);
+  int mV = readingTomV(measurement);
+  Serial.print(measurement);
+  Serial.print(" ");
+  Serial.println(mV);
+  dataFile.println(mV);
   samples++;
   if (samples >= 1000) {
     dataFile.close();
