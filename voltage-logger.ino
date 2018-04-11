@@ -1,12 +1,15 @@
 #include <SD.h>
 
 File dataFile;
+int threshold = 0;
+bool belowThresholdLastTime = false;
 
 #define LED_PIN 9
 #define BATTERY_PIN A0
 #define BUTTON_PIN 2
+#define TRANSISTOR_PIN 3
 
-// unused
+// measures the arduino's power supply (vcc) in mV
 long readVcc() {
   // Read 1.1V reference against AVcc
   // set the reference to Vcc and the measurement to the internal 1.1V reference
@@ -36,8 +39,8 @@ long readVcc() {
 // convert reading from Arduino's analog pin (0-1024) into millivolts (0-5000)
 // also accounts for voltage divider circuit with two 10-ohm resistors
 int readingTomV(int reading) {
-  float volts = (reading / 1024.0) * 5;
-  return (int)(volts * 2000);
+  float volts = (reading / 1024.0) * readVcc();
+  return (int)(volts * 2);
 }
 
 void blinkError(int err) {
@@ -53,13 +56,14 @@ void blinkError(int err) {
 void setup() {
   pinMode(LED_PIN, OUTPUT);
   pinMode(BUTTON_PIN, INPUT);
+  pinMode(TRANSISTOR_PIN, OUTPUT);
   Serial.begin(9600);
   Serial.print("init SD card...");
   pinMode(10, OUTPUT);
   if (!SD.begin(10)) {
     Serial.println("failed.");
     blinkError(1);
-    while(1);
+    while(1) delay(1000);
   }
   Serial.println("done. Enter filename.");
   while(Serial.available() == 0);
@@ -70,10 +74,18 @@ void setup() {
     Serial.println(filename);
     Serial.println("filename must be no more than 8 characters, then a dot, then an extension of no more than 3 characters (probably txt)");
     blinkError(2);
-    while(1);
+    while(1) delay(1000);
   }
+  while (threshold == 0) {
+    Serial.println("Enter threshold voltage (mV). The battery will stop being drained if the voltage is lower than this number.");
+    threshold = Serial.parseInt();
+  }
+  Serial.println(threshold);
   Serial.print("writing to ");
-  Serial.println(filename);
+  Serial.print(filename);
+  Serial.println(" after 5 seconds");
+  delay(5000);
+  digitalWrite(TRANSISTOR_PIN, HIGH);
 }
 
 void loop() {
@@ -81,10 +93,21 @@ void loop() {
   int mV = readingTomV(measurement);
   Serial.println(mV);
   dataFile.println(mV);
-  if (digitalRead(BUTTON_PIN)) {
-    dataFile.close();
-    digitalWrite(LED_PIN, HIGH);
-    while(1);
-  }
-  delay(1000);
+  if (digitalRead(BUTTON_PIN)) stop();
+  if (mV < threshold) {
+    if (belowThresholdLastTime) stop();
+    else belowThresholdLastTime = true;
+  } else belowThresholdLastTime = false;
+  digitalWrite(LED_PIN, HIGH);
+  delay(belowThresholdLastTime ? 750 : 250);
+  digitalWrite(LED_PIN, LOW);
+  delay(belowThresholdLastTime ? 250 : 750);
 }
+
+void stop() {
+  dataFile.close();
+  digitalWrite(LED_PIN, HIGH);
+  digitalWrite(TRANSISTOR_PIN, LOW);
+  while(1) delay(1000);
+}
+
